@@ -5,6 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Trading Plan — BUY &amp; SELL</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='12' fill='%23080c12'/><rect width='64' height='64' rx='12' fill='%2300b4d8' opacity='0.15'/><text x='50%25' y='54%25' dominant-baseline='middle' text-anchor='middle' font-family='monospace' font-weight='700' font-size='22' fill='%2300b4d8'>TP</text></svg>">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<link rel="manifest" href="site.webmanifest">
+<meta name="theme-color" content="#080c12">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Trading Plan">
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Noto+Sans+Thai:wght@300;400;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -203,7 +212,16 @@ body { background:var(--bg); color:var(--text); font-family:'Noto Sans Thai',san
 /* Trade list inside panel */
 .panel-list { padding:6px; max-height:400px; overflow-y:auto; }
 .panel-list::-webkit-scrollbar{width:3px} .panel-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
-.trade-row { display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:7px; margin-bottom:4px; background:var(--surface2); animation:fadeIn .2s ease; }
+.trade-row { display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:7px 7px 0 0; margin-bottom:0; background:var(--surface2); animation:fadeIn .2s ease; cursor:pointer; transition:background .15s; }
+.trade-row:hover { background:#1e2d42; }
+.cond-detail { display:none; background:var(--surface); border:1px solid var(--border); border-top:none; border-radius:0 0 7px 7px; margin-bottom:6px; overflow:hidden; }
+.cond-detail.open { display:block; animation:fadeIn .2s ease; }
+.cond-detail-row { display:flex; align-items:flex-start; gap:8px; padding:7px 12px; border-bottom:1px solid rgba(28,43,64,0.5); }
+.cond-detail-row:last-child { border-bottom:none; }
+.cond-detail-sub { font-family:'Space Mono',monospace; font-size:9px; padding:2px 5px; border-radius:3px; white-space:nowrap; margin-top:1px; }
+.cond-detail-sub.buy  { color:var(--buy);  background:var(--buy-dim); }
+.cond-detail-sub.sell { color:var(--sell); background:var(--sell-dim); }
+.cond-detail-text { font-size:11px; color:var(--text); line-height:1.4; }
 @keyframes fadeIn{from{opacity:0;transform:translateY(3px)}to{opacity:1}}
 .tr-pair { font-family:'Space Mono',monospace; font-size:11px; color:var(--text-bright); flex:1; }
 .tr-sub  { font-size:10px; color:var(--text-dim); }
@@ -675,7 +693,18 @@ window.saveResult = async (result) => {
   const tf=document.getElementById('inp-tf').value||'—';
   const date=document.getElementById('inp-date').value||new Date().toISOString().slice(0,10);
   const condCount=Object.values(checks).filter(Boolean).length;
-  const trade={pair,tf,date,condCount,totalCond:totalItems(mode),result,mode,ts:Date.now()};
+
+  // เก็บรายละเอียดเงื่อนไขที่เลือก
+  const selectedConds = [];
+  PLANS[mode].forEach((section, si) => {
+    section.items.forEach((item, ii) => {
+      if(checks[`${si}-${ii}`]) {
+        selectedConds.push({ sub: item.sub, text: item.text });
+      }
+    });
+  });
+
+  const trade={pair,tf,date,condCount,totalCond:totalItems(mode),result,mode,selectedConds,ts:Date.now()};
   const ind=document.getElementById('saving-indicator');
   ind.textContent='⏳ กำลังบันทึก...';
   try {
@@ -732,16 +761,32 @@ function renderPanel(m, trades){
 
   const list=document.getElementById(`${m}-list`);
   if(trades.length===0){ list.innerHTML=`<div class="panel-empty">ยังไม่มีประวัติ</div>`; return; }
-  list.innerHTML=trades.map(t=>`
-    <div class="trade-row">
-      <div>
+  list.innerHTML=trades.map((t,i)=>`
+    <div class="trade-row" onclick="toggleConds('${m}-cond-${i}')">
+      <div style="flex:1">
         <div class="tr-pair">${t.pair} <span style="color:var(--text-dim);font-size:9px;">${t.tf}</span></div>
         <div class="tr-sub">${t.date}</div>
       </div>
       <div class="tr-cond">✓${t.condCount}/${t.totalCond}</div>
       <div class="tr-result ${t.result}">${t.result.toUpperCase()}</div>
+      <div style="color:var(--text-dim);font-size:10px;">▾</div>
+    </div>
+    <div class="cond-detail" id="${m}-cond-${i}">
+      ${t.selectedConds && t.selectedConds.length > 0
+        ? t.selectedConds.map(c=>`
+          <div class="cond-detail-row">
+            <span class="cond-detail-sub ${m}">${c.sub}</span>
+            <span class="cond-detail-text">${c.text}</span>
+          </div>`).join('')
+        : '<div style="padding:8px 12px;font-size:11px;color:var(--text-dim);">ไม่มีข้อมูลเงื่อนไข (เทรดเก่า)</div>'
+      }
     </div>`).join('');
 }
+
+window.toggleConds = (id) => {
+  const el = document.getElementById(id);
+  if(el) el.classList.toggle('open');
+};
 
 /* ── CLEAR ── */
 window.clearHistory = async (m) => {
