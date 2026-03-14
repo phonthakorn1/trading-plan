@@ -212,9 +212,21 @@ body { background:var(--bg); color:var(--text); font-family:'Noto Sans Thai',san
 /* Trade list inside panel */
 .panel-list { padding:6px; max-height:400px; overflow-y:auto; }
 .panel-list::-webkit-scrollbar{width:3px} .panel-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
-.trade-row { display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:7px 7px 0 0; margin-bottom:0; background:var(--surface2); animation:fadeIn .2s ease; cursor:pointer; transition:background .15s; }
+.trade-card { margin-bottom:6px; }
+.trade-row { display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:7px 7px 0 0; background:var(--surface2); animation:fadeIn .2s ease; cursor:pointer; transition:background .15s; }
 .trade-row:hover { background:#1e2d42; }
-.cond-detail { display:none; background:var(--surface); border:1px solid var(--border); border-top:none; border-radius:0 0 7px 7px; margin-bottom:6px; overflow:hidden; }
+.tr-chevron { color:var(--text-dim); font-size:10px; transition:transform .2s; }
+.cond-detail.open + .trade-row .tr-chevron,
+.tr-chevron.open { transform:rotate(180deg); }
+.tr-delete {
+  background:none; border:1px solid var(--border);
+  color:var(--text-dim); font-size:10px;
+  width:20px; height:20px; border-radius:4px;
+  cursor:pointer; display:flex; align-items:center; justify-content:center;
+  transition:all .15s; padding:0; line-height:1;
+}
+.tr-delete:hover { color:var(--sell); border-color:var(--sell); background:var(--sell-dim); }
+.cond-detail { display:none; background:var(--surface); border:1px solid var(--border); border-top:none; border-radius:0 0 7px 7px; overflow:hidden; }
 .cond-detail.open { display:block; animation:fadeIn .2s ease; }
 .cond-detail-row { display:flex; align-items:flex-start; gap:8px; padding:7px 12px; border-bottom:1px solid rgba(28,43,64,0.5); }
 .cond-detail-row:last-child { border-bottom:none; }
@@ -222,6 +234,7 @@ body { background:var(--bg); color:var(--text); font-family:'Noto Sans Thai',san
 .cond-detail-sub.buy  { color:var(--buy);  background:var(--buy-dim); }
 .cond-detail-sub.sell { color:var(--sell); background:var(--sell-dim); }
 .cond-detail-text { font-size:11px; color:var(--text); line-height:1.4; }
+.cond-detail-empty { padding:10px 12px; font-size:11px; color:var(--text-dim); text-align:center; line-height:1.6; }
 @keyframes fadeIn{from{opacity:0;transform:translateY(3px)}to{opacity:1}}
 .tr-pair { font-family:'Space Mono',monospace; font-size:11px; color:var(--text-bright); flex:1; }
 .tr-sub  { font-size:10px; color:var(--text-dim); }
@@ -762,30 +775,45 @@ function renderPanel(m, trades){
   const list=document.getElementById(`${m}-list`);
   if(trades.length===0){ list.innerHTML=`<div class="panel-empty">ยังไม่มีประวัติ</div>`; return; }
   list.innerHTML=trades.map((t,i)=>`
-    <div class="trade-row" onclick="toggleConds('${m}-cond-${i}')">
-      <div style="flex:1">
-        <div class="tr-pair">${t.pair} <span style="color:var(--text-dim);font-size:9px;">${t.tf}</span></div>
-        <div class="tr-sub">${t.date}</div>
+    <div class="trade-card">
+      <div class="trade-row" onclick="toggleConds('${m}-cond-${i}')">
+        <div style="flex:1">
+          <div class="tr-pair">${t.pair} <span style="color:var(--text-dim);font-size:9px;">${t.tf}</span></div>
+          <div class="tr-sub">${t.date}</div>
+        </div>
+        <div class="tr-cond">✓${t.condCount}/${t.totalCond}</div>
+        <div class="tr-result ${t.result}">${t.result.toUpperCase()}</div>
+        <button class="tr-delete" onclick="event.stopPropagation();deleteTrade('${t.id}','${m}')">✕</button>
+        <div class="tr-chevron" id="chev-${m}-${i}">▾</div>
       </div>
-      <div class="tr-cond">✓${t.condCount}/${t.totalCond}</div>
-      <div class="tr-result ${t.result}">${t.result.toUpperCase()}</div>
-      <div style="color:var(--text-dim);font-size:10px;">▾</div>
-    </div>
-    <div class="cond-detail" id="${m}-cond-${i}">
-      ${t.selectedConds && t.selectedConds.length > 0
-        ? t.selectedConds.map(c=>`
-          <div class="cond-detail-row">
-            <span class="cond-detail-sub ${m}">${c.sub}</span>
-            <span class="cond-detail-text">${c.text}</span>
-          </div>`).join('')
-        : '<div style="padding:8px 12px;font-size:11px;color:var(--text-dim);">ไม่มีข้อมูลเงื่อนไข (เทรดเก่า)</div>'
-      }
+      <div class="cond-detail" id="${m}-cond-${i}">
+        ${t.selectedConds && t.selectedConds.length > 0
+          ? t.selectedConds.map(c=>`
+            <div class="cond-detail-row">
+              <span class="cond-detail-sub ${m}">${c.sub}</span>
+              <span class="cond-detail-text">${c.text}</span>
+            </div>`).join('')
+          : `<div class="cond-detail-empty">
+              ไม่มีข้อมูลเงื่อนไข — เทรดนี้บันทึกก่อนอัปเดต<br>
+              <span style="font-size:10px;color:var(--text-dim)">เทรดใหม่จะแสดงเงื่อนไขอัตโนมัติ</span>
+            </div>`
+        }
+      </div>
     </div>`).join('');
 }
 
 window.toggleConds = (id) => {
   const el = document.getElementById(id);
   if(el) el.classList.toggle('open');
+};
+
+window.deleteTrade = async (tradeId, m) => {
+  if(!confirm('ลบเทรดนี้?')) return;
+  try {
+    await deleteDoc(doc(db,'users',currentUser.uid,'history',tradeId));
+    userHistory = userHistory.filter(t => t.id !== tradeId);
+    renderHistory();
+  } catch(e) { alert('ลบไม่สำเร็จ กรุณาลองใหม่'); }
 };
 
 /* ── CLEAR ── */
